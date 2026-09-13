@@ -43,11 +43,12 @@ static void drawDataRow(int y, const char* label, const char* value, uint16_t va
 
 // ── 1. RADAR SCREEN ───────────────────────────────────────
 // Animated sweep arm + blip dots for each tracked flight.
-// Layout: top bar 20px | radar circle 160px | stats footer 100px
+// Layout: top bar 20px | radar circle centered in the remaining
+// ~270px above the footer | stats footer ~85px
 
-#define RADAR_CX     (SCREEN_W / 2)        // 120
-#define RADAR_CY     (20 + 80)             // 100  (top of radar = y=20)
-#define RADAR_R      75
+#define RADAR_CX     (SCREEN_W / 2)        // 180
+#define RADAR_CY     155                   // centers the circle in the 20..~270 band
+#define RADAR_R      110
 
 static float  _sweepAngle = 0.0f;
 static uint32_t _lastTickMs = 0;
@@ -207,18 +208,18 @@ void drawAlertScreen(int idx) {
   // Airline badge
   String iata      = extractIATA(f.callsign);
   AirlineInfo info = findAirline(iata);
-  drawBadge(SCREEN_W/2 - 36, 28, 72, 30, info.color, iata.c_str(), TFT_WHITE, 6);
+  drawBadge(SCREEN_W/2 - 40, 40, 80, 34, info.color, iata.c_str(), TFT_WHITE, 6);
 
   // Callsign
   tft.setTextSize(2); tft.setTextColor(TFT_WHITE);
   tft.setTextDatum(lgfx::middle_center);
-  tft.drawString(f.callsign, SCREEN_W/2, 72);
+  tft.drawString(f.callsign, SCREEN_W/2, 92);
 
   // Airline name
   tft.setTextSize(1); tft.setTextColor(C_MUTED);
-  tft.drawString(info.name, SCREEN_W/2, 90);
+  tft.drawString(info.name, SCREEN_W/2, 114);
 
-  drawDivider(100);
+  drawDivider(128);
 
   // 6-cell grid (2 columns × 3 rows)
   struct Cell { const char* label; char value[20]; uint16_t color; };
@@ -233,8 +234,8 @@ void drawAlertScreen(int idx) {
   snprintf(cells[4].value, 20, "%.0f°",    f.heading_deg);    cells[4].label = "HDG";     cells[4].color = C_MUTED;
   snprintf(cells[5].value, 20, "%s",  iata.c_str());          cells[5].label = "AIRLINE"; cells[5].color = info.color;
 
-  int gridY = 108;
-  int cellH = 32;
+  int gridY = 140;
+  int cellH = 48;
   for (int i = 0; i < 6; i++) {
     int col  = i % 2;
     int row  = i / 2;
@@ -243,10 +244,10 @@ void drawAlertScreen(int idx) {
 
     tft.setTextSize(1); tft.setTextColor(C_DIM);
     tft.setTextDatum(lgfx::middle_center);
-    tft.drawString(cells[i].label, cx, cy - 8);
+    tft.drawString(cells[i].label, cx, cy - 10);
 
     tft.setTextSize(1); tft.setTextColor(cells[i].color);
-    tft.drawString(cells[i].value, cx, cy + 8);
+    tft.drawString(cells[i].value, cx, cy + 10);
 
     if (col == 0) tft.drawFastVLine(SCREEN_W/2, gridY + row*cellH, cellH, C_BORDER);
     if (row < 2)  tft.drawFastHLine(0, gridY + (row+1)*cellH, SCREEN_W, C_BORDER);
@@ -254,7 +255,7 @@ void drawAlertScreen(int idx) {
 
   // Hint
   tft.setTextColor(C_DIM); tft.setTextDatum(lgfx::middle_center);
-  tft.drawString("Hold knob for radar", SCREEN_W/2, SCREEN_H - 8);
+  tft.drawString("Hold knob for radar", SCREEN_W/2, SCREEN_H - 12);
 }
 
 void updateAlertETA(int idx) {
@@ -263,8 +264,8 @@ void updateAlertETA(int idx) {
   char buf[12];
   fmtETA(g_flights[idx].eta_seconds, buf, sizeof(buf));
   int cx = 3 * SCREEN_W / 4;
-  int cy = 108 + 16;   // gridY + 0*cellH + cellH/2 + 8
-  tft.fillRect(cx - 30, cy - 10, 60, 20, C_BG);
+  int cy = 140 + 24;   // gridY + 0*cellH + cellH/2 + 10
+  tft.fillRect(cx - 35, cy - 12, 70, 24, C_BG);
   tft.setTextSize(1); tft.setTextColor(C_ORANGE);
   tft.setTextDatum(lgfx::middle_center);
   tft.drawString(buf, cx, cy);
@@ -274,7 +275,7 @@ void updateAlertETA(int idx) {
 // Scrollable list of up to 5 visible flights
 
 #define LIST_ITEM_H  44
-#define LIST_VISIBLE  5
+#define LIST_VISIBLE  7   // 360px tall screen fits more rows than the original 280px design
 
 void drawListScreen(int selectedIdx) {
   tft.fillScreen(C_BG);
@@ -366,29 +367,29 @@ void drawDetailScreen(int idx) {
   drawTopBar(f.callsign, g_wifi_connected);
 
   // Photo area placeholder — aircraft_photo will draw into this region
-  // Region: x=0 y=20 w=240 h=130
-  tft.fillRect(0, 20, SCREEN_W, 130, tft.color565(8, 8, 16));
+  // Region: x=0 y=20 w=360 h=180 (must match PHOTO_X/Y/W/H in aircraft_photo.cpp)
+  tft.fillRect(0, 20, SCREEN_W, 180, tft.color565(8, 8, 16));
   tft.setTextColor(C_DIM); tft.setTextDatum(lgfx::middle_center);
   tft.setTextSize(1);
-  tft.drawString("Loading photo...", SCREEN_W/2, 85);
+  tft.drawString("Loading photo...", SCREEN_W/2, 110);
 
-  drawDivider(150);
+  drawDivider(200);
 
   // Airline badge + name strip
   String iata      = extractIATA(f.callsign);
   AirlineInfo info = findAirline(iata);
-  drawBadge(8, 154, 28, 16, info.color, iata.c_str(), TFT_WHITE, 3);
+  drawBadge(8, 206, 28, 16, info.color, iata.c_str(), TFT_WHITE, 3);
   tft.setTextColor(TFT_WHITE); tft.setTextDatum(lgfx::middle_left);
-  tft.drawString(info.name, 42, 162);
+  tft.drawString(info.name, 42, 214);
 
   // Distance badge right
   uint16_t distColor = (f.distance_km <= g_config.alert_dist_km) ? C_RED : C_GREEN;
   char distBuf[16];
   snprintf(distBuf, sizeof(distBuf), "%.1fkm", f.distance_km);
   tft.setTextColor(distColor); tft.setTextDatum(lgfx::middle_right);
-  tft.drawString(distBuf, SCREEN_W - 8, 162);
+  tft.drawString(distBuf, SCREEN_W - 8, 214);
 
-  drawDivider(172);
+  drawDivider(228);
 
   // 6-cell mini grid  (3 cols × 2 rows)
   struct MiniCell { const char* label; char value[16]; uint16_t color; };
@@ -403,9 +404,9 @@ void drawDetailScreen(int idx) {
   snprintf(mc[4].value, 16, "%s",      etaBuf);            mc[4].label="ETA";   mc[4].color=C_ORANGE;
   snprintf(mc[5].value, 16, "%s",      f.icao24);          mc[5].label="HEX";   mc[5].color=C_DIM;
 
-  int gY   = 176;
+  int gY   = 234;
   int colW = SCREEN_W / 3;
-  int rowH = (SCREEN_H - gY - 10) / 2;
+  int rowH = (SCREEN_H - gY - 8) / 2;
 
   for (int i = 0; i < 6; i++) {
     int col = i % 3;
@@ -415,10 +416,10 @@ void drawDetailScreen(int idx) {
 
     tft.setTextSize(1); tft.setTextColor(C_DIM);
     tft.setTextDatum(lgfx::middle_center);
-    tft.drawString(mc[i].label, cx, cy - 8);
+    tft.drawString(mc[i].label, cx, cy - 10);
 
     tft.setTextColor(mc[i].color);
-    tft.drawString(mc[i].value, cx, cy + 6);
+    tft.drawString(mc[i].value, cx, cy + 8);
 
     if (col < 2) tft.drawFastVLine((col+1)*colW, gY, rowH*2, C_BORDER);
   }
@@ -426,5 +427,5 @@ void drawDetailScreen(int idx) {
 
   // Hint
   tft.setTextColor(C_DIM); tft.setTextDatum(lgfx::middle_center);
-  tft.drawString("Hold knob · Back", SCREEN_W/2, SCREEN_H - 5);
+  tft.drawString("Hold knob · Back", SCREEN_W/2, SCREEN_H - 6);
 }

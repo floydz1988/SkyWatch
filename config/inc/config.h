@@ -2,31 +2,36 @@
 // ============================================================
 //  config.h — SkyWatch · Waveshare ESP32-S3-Knob-Touch-LCD-1.8
 //  All pins, colours, and tunable constants in one place.
-//  Verify pin numbers against your board's Wiki before flashing.
+//
+//  Pin map verified directly against Waveshare's official demo firmware
+//  (ESP32-S3-Knob-Touch-LCD-1.8-Demo.zip, 08_LVGL_Test/lcd_config.h and
+//  04_Encoder_Test/04_Encoder_Test.ino) — not assumed.
 // ============================================================
 
 // ── PIN MAP ─────────────────────────────────────────────────
-// ST7789 SPI display
-#define LCD_MOSI     11
-#define LCD_SCLK     12
-#define LCD_CS       10
-#define LCD_DC        8
-#define LCD_RST       9
-#define LCD_BL       46   // backlight PWM
+// SH8601 QSPI AMOLED display, 360x360
+#define LCD_CS       14
+#define LCD_SCLK     13   // QSPI clock (PCLK)
+#define LCD_SDIO0    15   // QSPI data 0
+#define LCD_SDIO1    16   // QSPI data 1
+#define LCD_SDIO2    17   // QSPI data 2
+#define LCD_SDIO3    18   // QSPI data 3
+#define LCD_RST      21
+#define LCD_BL       47   // backlight PWM
 
-// Rotary encoder
-#define ENC_A         1
-#define ENC_B         2
-#define ENC_SW        0   // push button (active LOW)
+// Rotary encoder (rotation only — this knob has no physical push button;
+// "select" is a tap on the touchscreen instead, see knob.cpp)
+#define ENC_A         8
+#define ENC_B         7
 
-// Capacitive touch (CST816S I2C) — optional, not used in v1
-#define TOUCH_SDA     4
-#define TOUCH_SCL     5
-#define TOUCH_INT     3
+// Capacitive touch (CST816, I2C) — doubles as the knob's "press" input
+#define TOUCH_SDA    11
+#define TOUCH_SCL    12
+#define TOUCH_ADDR   0x15
 
 // ── DISPLAY ─────────────────────────────────────────────────
-#define SCREEN_W    240
-#define SCREEN_H    280
+#define SCREEN_W    360
+#define SCREEN_H    360
 #define BL_FULL     255
 #define BL_DIM       25   // ~10% — night mode
 #define DIM_AFTER_MS (10UL * 60 * 1000)  // 10 minutes

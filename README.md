@@ -13,8 +13,8 @@ Track every plane within 10 km of your home in real time — radar sweep, alert 
 | Board | Waveshare ESP32-S3-Knob-Touch-LCD-1.8 |
 | Chip | ESP32-S3 (QFN56), 8 MB embedded octal PSRAM |
 | Flash | **16 MB**, quad I/O — confirmed with `esptool flash_id` against the physical device, not assumed |
-| Display | ST7789 IPS 240×280 SPI (LovyanGFX) |
-| Input | Rotary encoder + push button |
+| Display | **SH8601 AMOLED, 360×360, QSPI** ([Arduino_GFX](https://github.com/moononournation/Arduino_GFX)) — verified against Waveshare's own demo firmware; earlier revisions of this project incorrectly assumed a plain-SPI ST7789 240×280 panel |
+| Input | Rotary encoder (rotation only — **no physical button**) + capacitive touchscreen (CST816) for select/press |
 | Storage | LittleFS on a custom-partitioned ~11.9 MB data partition — see [Flash layout](#flash-layout) |
 
 ---
@@ -27,7 +27,7 @@ Track every plane within 10 km of your home in real time — radar sweep, alert 
 - **Detail screen** — real aircraft photo (Planespotters.net) + full data grid
 - **Custom screensaver** — upload your own JPEG logo via the web portal
 - **Night mode** — auto-dims to 10 % after 10 minutes of inactivity
-- **Config portal** — hold knob 5 s → AP `SkyWatch-Setup` → browser setup page
+- **Config portal** — hold the touchscreen 0.8 s → AP `SkyWatch-Setup` → browser setup page
 - **Personal records** — closest approach, fastest, highest (NVS, survives reflash)
 
 ---
@@ -54,7 +54,7 @@ SkyWatch/
 ├── airline/                  # Airline DB (27 carriers) + badge colour lookup
 │   ├── inc/airlines.h
 │   └── src/airlines.cpp
-├── display/                  # LovyanGFX LGFX class + draw helpers
+├── display/                  # Arduino_GFX-backed LGFX facade + draw helpers
 │   ├── inc/display.h
 │   └── src/display.cpp
 ├── screen/                   # Full-screen renderers (radar/alert/list/detail)
@@ -75,9 +75,12 @@ SkyWatch/
 ├── aircraft_photo/            # Planespotters API + JPEG fetch/draw
 │   ├── inc/aircraft_photo.h
 │   └── src/aircraft_photo.cpp
-├── knob/                      # Rotary encoder + debounced button
+├── knob/                      # Rotary encoder rotation + touch-driven press/long-press
 │   ├── inc/knob.h
 │   └── src/knob.cpp
+├── touch/                     # CST816 capacitive touch (I2C) — this knob has no physical button
+│   ├── inc/touch.h
+│   └── src/touch.cpp
 ├── screensaver/                # LittleFS logo or built-in branding
 │   ├── inc/screensaver.h
 │   └── src/screensaver.cpp
@@ -111,7 +114,7 @@ manual include-path setup needed.
 
 ```bash
 # 1. Install arduino-cli, then one-time setup:
-make libs        # installs the ESP32 core + LovyanGFX + ArduinoJson
+make libs        # installs the ESP32 core + Arduino_GFX + TJpg_Decoder + ArduinoJson
 
 # 2. Compile:
 make build        # → build/output/SkyWatch.ino.bin
@@ -149,7 +152,8 @@ Required libraries (install via Arduino Library Manager either way):
 
 | Library | Version tested |
 |---------|---------------|
-| **LovyanGFX** | 1.x |
+| **GFX Library for Arduino** ([Arduino_GFX](https://github.com/moononournation/Arduino_GFX)) | 1.6.7 |
+| **TJpg_Decoder** | 1.1.0 |
 | **ArduinoJson** | 7.x |
 | ESP32 Arduino core | 3.x (includes WiFi, WebServer, LittleFS, HTTPClient, Preferences) |
 
@@ -213,16 +217,16 @@ Arduino IDE's LittleFS Data Upload tool) flashes it alongside `config.json`.
 
 `screensaver.cpp` draws the JPEG at its native pixel size, centered, with
 **no automatic scale-to-fit** — so the source image must already be sized
-to the 240×280 panel before it's converted. To swap in a different logo:
+to the 360×360 panel before it's converted. To swap in a different logo:
 
 ```bash
-sips -Z 240 -s format jpeg -s formatOptions 85 your-logo.png --out data/logo.jpg
+sips -Z 360 -s format jpeg -s formatOptions 85 your-logo.png --out data/logo.jpg
 ```
 
-`-Z 240` scales the longer edge to 240 px, preserving aspect ratio — a
+`-Z 360` scales the longer edge to 360 px, preserving aspect ratio — a
 landscape logo ends up centered with black letterboxing top/bottom; a
-portrait one fills closer to the full 240×280. Keep it under ~200 KB (the
-size `screensaverDraw()` checks before decoding).
+square one fills the full 360×360. Keep it under ~200 KB (the size
+`screensaverDraw()` checks before decoding).
 
 Owners can also replace it later without reflashing firmware, via the
 config portal's **Custom Screensaver Logo** upload (writes to `/logo.jpg`
@@ -236,7 +240,7 @@ On first boot (or when WiFi credentials are missing) the screensaver shows autom
 
 **To open the setup portal:**
 
-1. Hold the knob button for **5 seconds** on the radar or screensaver screen.
+1. Hold a finger on the touchscreen for **0.8 seconds** on the radar or screensaver screen (this knob has no physical button — see [Knob controls](#knob-controls)).
 2. The display shows **"SkyWatch-Setup"** AP details.
 3. Connect your phone/laptop to the `SkyWatch-Setup` WiFi (password: `skywatch1`).
 4. Open `http://192.168.4.1` in a browser.
@@ -250,15 +254,20 @@ On first boot (or when WiFi credentials are missing) the screensaver shows autom
 
 ## Knob controls
 
+This knob is rotation-only — there's no physical click. "Press" and "long
+press" below are a tap / tap-and-hold anywhere on the touchscreen instead
+(see [touch/](touch/)), read through the same debounce/long-press logic in
+[knob.cpp](knob/src/knob.cpp) that used to read a physical button.
+
 | Action | Result |
 |--------|--------|
 | Rotate | Scroll flight list (from any screen) |
-| Short press on screensaver/radar | Open flight list |
-| Short press on list | Open detail screen |
-| Short press on detail | Back to list |
-| Short press on alert | Open detail |
-| **Long press (5 s) on radar/screensaver** | **Open config portal** |
-| Long press on list/alert/detail | Back to radar |
+| Tap on screensaver/radar | Open flight list |
+| Tap on list | Open detail screen |
+| Tap on detail | Back to list |
+| Tap on alert | Open detail |
+| **Hold (0.8 s) on radar/screensaver** | **Open config portal** |
+| Hold on list/alert/detail | Back to radar |
 
 ---
 

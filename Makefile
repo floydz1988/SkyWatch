@@ -21,9 +21,18 @@ SKETCH_INO   := $(SKETCH_NAME).ino
 # ../SkyWatch_factory_backup/MANIFEST.txt. PartitionScheme=custom picks up
 # partitions.csv in this folder (sized for that real 16 MB, not the board
 # default's 4 MB — see partitions.csv for the full rationale).
+# CDCOnBoot=cdc: the board default (Disabled) routes Arduino's Serial
+# object to the physical UART0 pins instead of the USB port this board is
+# actually flashed/monitored over — with it Disabled, every Serial.print()
+# in the firmware goes nowhere reachable, only the ROM's own low-level boot
+# messages appear over USB regardless of this setting. Confirmed by capturing
+# raw serial after reset: without this, only ROM output showed up; the app
+# never printed anything past that, even though it demonstrably keeps running
+# (WiFi connects, knob works, etc.) — with CDCOnBoot=cdc, Serial.println()
+# is what SkyWatch.ino actually calls throughout setup()/loop() for status.
 # Re-verify option keys/values for your installed core with:
 #   arduino-cli board details -b esp32:esp32:esp32s3 --full
-FQBN ?= esp32:esp32:esp32s3:FlashMode=qio,FlashSize=16M,PartitionScheme=custom,PSRAM=opi,UploadSpeed=921600
+FQBN ?= esp32:esp32:esp32s3:FlashMode=qio,FlashSize=16M,PartitionScheme=custom,CDCOnBoot=cdc,PSRAM=opi,UploadSpeed=921600
 
 # Serial port for upload/monitor — override on the command line, e.g.:
 #   make upload PORT=/dev/cu.usbmodem14101
@@ -34,7 +43,7 @@ BAUD ?= 115200
 # Every top-level module folder follows <module>/src/*.cpp + <module>/inc/*.h.
 # Header-only modules (no src/) are simply skipped by the wildcard below.
 MODULES := config flight airline display screen haversine \
-           wifi_manager opensky records aircraft_photo knob screensaver
+           wifi_manager opensky records aircraft_photo knob screensaver touch
 
 INC_DIRS   := $(foreach m,$(MODULES),$(CURDIR)/$(m)/inc)
 INC_FLAGS  := $(foreach d,$(INC_DIRS),-I$(d))
@@ -76,7 +85,8 @@ help:
 libs:
 	arduino-cli core update-index
 	arduino-cli core install esp32:esp32
-	arduino-cli lib install "LovyanGFX"
+	arduino-cli lib install "GFX Library for Arduino"
+	arduino-cli lib install "TJpg_Decoder"
 	arduino-cli lib install "ArduinoJson"
 
 # ── Assemble the flat build sketch ──────────────────────────

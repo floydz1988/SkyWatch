@@ -1,23 +1,28 @@
 // ============================================================
-//  knob.cpp — Rotary encoder + debounced button
+//  knob.cpp — Rotary encoder (rotation) + touchscreen (press)
+//  This knob has no physical push button — "press"/"long-press"
+//  are driven by the touchscreen instead, but the debounce/
+//  long-press state machine and public API are unchanged so
+//  every call site (SkyWatch.ino) keeps working as-is.
 // ============================================================
 #include "knob.h"
+#include "touch.h"
 
 static volatile int8_t _delta     = 0;
 static int8_t  _lastA              = HIGH;
 static int8_t  _lastB              = HIGH;
 
-// Button debounce
+// Press debounce (driven by touchTouched(), not a GPIO)
 static bool    _btnPressed         = false;
 static bool    _btnLongPressed     = false;
-static bool    _lastBtnState       = HIGH;
+static bool    _lastBtnState       = false;
 static uint32_t _btnDownAt         = 0;
 static bool    _longFired          = false;
 
 void knobInit() {
-  pinMode(ENC_A,  INPUT_PULLUP);
-  pinMode(ENC_B,  INPUT_PULLUP);
-  pinMode(ENC_SW, INPUT_PULLUP);
+  pinMode(ENC_A, INPUT_PULLUP);
+  pinMode(ENC_B, INPUT_PULLUP);
+  touchInit();
 }
 
 void knobUpdate() {
@@ -30,8 +35,9 @@ void knobUpdate() {
   }
   _lastB = b;
 
-  // ── Button ────────────────────────────────────────────────
-  bool btnNow = (digitalRead(ENC_SW) == LOW);   // active LOW
+  // ── Press (touch) ──────────────────────────────────────────
+  touchUpdate();
+  bool btnNow = touchTouched();
 
   if (btnNow && !_lastBtnState) {
     // Press start

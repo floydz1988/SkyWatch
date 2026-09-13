@@ -32,7 +32,7 @@ static bool tryDrawLogo() {
   if (read != sz) { free(buf); return false; }
 
   tft.fillScreen(TFT_BLACK);
-  // Centre the logo in the full screen (240×280)
+  // Centre the logo in the full screen (SCREEN_W x SCREEN_H)
   tft.drawJpg(buf, sz, 0, 0, SCREEN_W, SCREEN_H,
               0, 0, lgfx::datum_t::middle_center);
   free(buf);

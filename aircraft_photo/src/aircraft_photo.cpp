@@ -9,11 +9,12 @@
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 
-// Photo region on detail screen
+// Photo region on detail screen — must match the placeholder rect
+// drawn in screen/src/screens.cpp's drawDetailScreen()
 #define PHOTO_X  0
 #define PHOTO_Y  20
-#define PHOTO_W  SCREEN_W   // 240
-#define PHOTO_H  130
+#define PHOTO_W  SCREEN_W   // 360
+#define PHOTO_H  180
 
 // ── SVG silhouette fallback (generic airliner in radar-green) ─
 static void drawSilhouette() {

@@ -11,9 +11,11 @@ Track every plane within 10 km of your home in real time — radar sweep, alert 
 | Item | Detail |
 |------|--------|
 | Board | Waveshare ESP32-S3-Knob-Touch-LCD-1.8 |
+| Chip | ESP32-S3 (QFN56), 8 MB embedded octal PSRAM |
+| Flash | **16 MB**, quad I/O — confirmed with `esptool flash_id` against the physical device, not assumed |
 | Display | ST7789 IPS 240×280 SPI (LovyanGFX) |
 | Input | Rotary encoder + push button |
-| Storage | LittleFS (4 MB flash) |
+| Storage | LittleFS on a custom-partitioned ~11.9 MB data partition — see [Flash layout](#flash-layout) |
 
 ---
 
@@ -124,11 +126,13 @@ make fs PORT=/dev/ttyUSB0
 make monitor PORT=/dev/ttyUSB0
 ```
 
-Run `make help` for the full target list. The board FQBN (flash mode, PSRAM,
-upload speed) and the LittleFS partition offset/size are variables at the
-top of the [Makefile](Makefile) — check them against your installed ESP32
-core with `arduino-cli board details -f esp32:esp32:esp32s3` before your
-first flash, since option keys can shift between core versions.
+Run `make help` for the full target list. The board FQBN (flash mode/size,
+partition scheme, PSRAM, upload speed) and the LittleFS partition
+offset/size are variables at the top of the [Makefile](Makefile) — check
+them against your installed ESP32 core with
+`arduino-cli board details -b esp32:esp32:esp32s3 --full` before your first
+flash, since option keys can shift between core versions. See
+[Flash layout](#flash-layout) below for why these specific values.
 
 ### Option B — Arduino IDE
 
@@ -149,8 +153,53 @@ Required libraries (install via Arduino Library Manager either way):
 | **ArduinoJson** | 7.x |
 | ESP32 Arduino core | 3.x (includes WiFi, WebServer, LittleFS, HTTPClient, Preferences) |
 
-Board: **ESP32S3 Dev Module** (or Waveshare ESP32-S3) · Flash mode **DOUT**
-· PSRAM **OPI PSRAM** · Upload speed **921600**.
+Board: **ESP32S3 Dev Module** (or Waveshare ESP32-S3) · Flash mode **QIO
+80MHz** · Flash size **16MB** · Partition Scheme **Custom** (picks up
+[`partitions.csv`](partitions.csv) automatically since it sits next to
+`SkyWatch.ino`) · PSRAM **OPI PSRAM** · Upload speed **921600**.
+
+---
+
+## Flash layout
+
+The board's flash was originally assumed to be 4 MB (the ESP32 Arduino
+core's own board default) — that was wrong. Reading it directly off the
+physical device with `esptool flash_id` confirmed **16 MB**, quad-I/O, with
+8 MB of embedded octal PSRAM. Building against the unconfigured 4 MB
+default meant the firmware was sitting at 88–91% of a ~1.3 MB app
+partition that didn't actually exist on the chip — false pressure, not a
+real constraint.
+
+[`partitions.csv`](partitions.csv) is a custom table sized for the real 16 MB
+and for what SkyWatch actually needs — not one of the ESP32 core's bundled
+16 MB presets, since all of them either reserve a second OTA app slot
+SkyWatch has no code path to ever write to (halving usable space for
+nothing) or label the data partition `fat` instead of `spiffs` (the label
+the Arduino `LittleFS` library looks for by default — a `fat`-labeled
+partition means `LittleFS.begin()` silently fails to find it):
+
+| Partition | Offset | Size | Purpose |
+|---|---|---|---|
+| `nvs` | `0x9000` | 20 KB | WiFi credentials / `Preferences` storage |
+| `otadata` | `0xe000` | 8 KB | Kept for bootloader compatibility (see below) |
+| `app0` | `0x10000` | **4 MB** | Firmware — current build uses ~1.16 MB (~28%) |
+| `spiffs` | `0x410000` | **~11.9 MB** | LittleFS — `config.json`, `logo.jpg`, future data |
+| `coredump` | `0xff0000` | 64 KB | Crash dumps |
+
+No second OTA slot: SkyWatch has no OTA-update code, so mirroring the app
+image in a second slot would only waste ~4 MB for a feature that doesn't
+exist. This follows the ESP32 core's own `no_ota.csv` convention — a single
+`ota_0` slot plus `otadata`, rather than a `factory`-type slot — so the
+bootloader's boot-slot-selection logic still behaves exactly as it does on
+every other ESP32 Arduino board.
+
+If you flash the factory-original firmware back (see
+[`SkyWatch_factory_backup/`](../SkyWatch_factory_backup) — a sibling
+folder, not part of this repo), you overwrite this table with the factory
+one (dual 3 MB OTA slots + a ~10 MB SPIFFS partition at a *different*
+offset) — the two aren't compatible, don't mix a SkyWatch app build with
+the factory partition table or vice versa. Re-flashing SkyWatch's own
+`make build`/`make upload` always writes its own table back out.
 
 ---
 

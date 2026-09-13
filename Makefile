@@ -15,10 +15,15 @@
 SKETCH_NAME  := SkyWatch
 SKETCH_INO   := $(SKETCH_NAME).ino
 
-# Board: Waveshare ESP32-S3-Knob-Touch-LCD-1.8 (see README hardware section).
-# Verify the option keys/values for your installed ESP32 core with:
-#   arduino-cli board details -f esp32:esp32:esp32s3
-FQBN ?= esp32:esp32:esp32s3:FlashMode=dio,PSRAM=opi,UploadSpeed=921600
+# Board: Waveshare ESP32-S3-Knob-Touch-LCD-1.8.
+# FlashSize/FlashMode/PSRAM below were confirmed against the physical device
+# with `esptool flash_id` (16 MB quad-I/O flash, embedded octal PSRAM) — see
+# ../SkyWatch_factory_backup/MANIFEST.txt. PartitionScheme=custom picks up
+# partitions.csv in this folder (sized for that real 16 MB, not the board
+# default's 4 MB — see partitions.csv for the full rationale).
+# Re-verify option keys/values for your installed core with:
+#   arduino-cli board details -b esp32:esp32:esp32s3 --full
+FQBN ?= esp32:esp32:esp32s3:FlashMode=qio,FlashSize=16M,PartitionScheme=custom,PSRAM=opi,UploadSpeed=921600
 
 # Serial port for upload/monitor — override on the command line, e.g.:
 #   make upload PORT=/dev/cu.usbmodem14101
@@ -45,8 +50,13 @@ OUTPUT_DIR    := $(BUILD_DIR)/output
 # arduino-cli only compiles sources that live directly inside the sketch
 # folder, so we assemble a flat copy here on every build. Headers are NOT
 # copied — they're found via INC_FLAGS, so each module's inc/ stays the
-# single source of truth for its header.
+# single source of truth for its header. partitions.csv DOES need to be
+# copied in: with PartitionScheme=custom, arduino-cli looks for it inside
+# the sketch folder it's actually compiling (this assembled copy), not the
+# project root — a custom table sitting only at the root is silently never
+# picked up.
 ASSEMBLED_SRC := $(BUILD_SKETCH)/$(SKETCH_INO) \
+                  $(BUILD_SKETCH)/partitions.csv \
                   $(patsubst %,$(BUILD_SKETCH)/%,$(notdir $(MODULE_SRC)))
 
 .PHONY: all help libs build upload monitor fs clean
@@ -75,6 +85,9 @@ $(BUILD_SKETCH):
 
 $(BUILD_SKETCH)/$(SKETCH_INO): $(SKETCH_INO) | $(BUILD_SKETCH)
 	@cp $(SKETCH_INO) $(BUILD_SKETCH)/
+
+$(BUILD_SKETCH)/partitions.csv: partitions.csv | $(BUILD_SKETCH)
+	@cp partitions.csv $(BUILD_SKETCH)/
 
 # Pattern rule: copy every module .cpp into the flat sketch dir.
 # (Module basenames are unique across the tree, so flattening is safe.)
@@ -105,11 +118,9 @@ monitor:
 # ── LittleFS data image (data/config.json etc.) ─────────────
 # Locates mklittlefs and esptool inside the ESP32 core installed by
 # `make libs`, builds a filesystem image from data/, and flashes it.
-# Verify LITTLEFS_OFFSET/LITTLEFS_SIZE against your board's partition
-# scheme (arduino-cli board details -f $(FQBN) shows the partition CSV)
-# before relying on the defaults below.
-LITTLEFS_OFFSET ?= 0x670000
-LITTLEFS_SIZE   ?= 0x160000
+# Offset/size must match the "spiffs" row in partitions.csv exactly.
+LITTLEFS_OFFSET ?= 0x410000
+LITTLEFS_SIZE   ?= 0xbe0000
 # arduino-cli's data dir is ~/.arduino15 on Linux/Windows but
 # ~/Library/Arduino15 on macOS — search both, take the newest version found.
 ARDUINO_DATA_DIRS := $(HOME)/.arduino15 $(HOME)/Library/Arduino15

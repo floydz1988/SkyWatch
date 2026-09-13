@@ -1,0 +1,17 @@
+# SkyWatch — custom partition table for the Waveshare ESP32-S3-Knob-Touch-LCD-1.8's
+# actual 16 MB flash (confirmed via `esptool flash_id` against the physical device —
+# see ../SkyWatch_factory_backup/MANIFEST.txt for the factory layout this replaces).
+#
+# SkyWatch has no OTA update mechanism, so this follows the ESP32 core's own
+# `no_ota.csv` convention (single ota_0 app slot + otadata, no second slot) rather
+# than wasting ~half the chip mirroring an app image that's never written to.
+# The freed space goes to a single large LittleFS-compatible data partition — the
+# Arduino LittleFS library mounts the partition labeled "spiffs" by default, so the
+# subtype must stay "spiffs" even though the filesystem itself is LittleFS.
+#
+# Name,     Type, SubType,  Offset,   Size,     Flags
+nvs,        data, nvs,      0x9000,   0x5000,
+otadata,    data, ota,      0xe000,   0x2000,
+app0,       app,  ota_0,    0x10000,  0x400000,
+spiffs,     data, spiffs,   0x410000, 0xbe0000,
+coredump,   data, coredump, 0xff0000, 0x10000,

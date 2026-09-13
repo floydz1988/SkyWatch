@@ -1,0 +1,25 @@
+# Arduino build output
+build/
+*.bin
+*.elf
+*.map
+*.hex
+
+# Arduino IDE temp / cache
+.arduino15/
+*.cache
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# VS Code (if used alongside Arduino IDE)
+.vscode/
+
+# Sensitive / personal config (never commit real WiFi credentials)
+data/config.json
+
+# Log files
+*.log
